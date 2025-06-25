@@ -82,6 +82,7 @@ python -m mootdx bestip -vv
 ### 下载历史行情
 
 ```bash
+python fetch_kline.py --workers 10 --out ./data --end today --start 20200101 --max-mktcap +inf
 python fetch_kline.py \
   --datasource mootdx      # mootdx / akshare / tushare
   --frequency 4            # K 线频率编码（4 = 日线）
@@ -99,6 +100,7 @@ python fetch_kline.py \
 ### 运行选股
 
 ```bash
+python select_stock.py --date 2025-06-21 --config ./configs.json --data-dir ./data
 python select_stock.py \
   --data-dir ./data        # CSV 行情目录
   --config ./configs.json  # Selector 配置
