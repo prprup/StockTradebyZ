@@ -4,7 +4,6 @@ import argparse
 import datetime as dt
 import json
 import logging
-import os
 import random
 import sys
 import time
@@ -138,13 +137,12 @@ def _get_kline_tushare(code: str, start: str, end: str, adjust: str) -> pd.DataF
         return pd.DataFrame()
 
     df = df.rename(columns={"trade_date": "date", "vol": "volume"})[
-        ["date", "open", "close", "high", "low", "volume", "amount"]
+        ["date", "open", "close", "high", "low", "volume"]
     ].copy()
     df["date"] = pd.to_datetime(df["date"])
     df[[c for c in df.columns if c != "date"]] = df[[c for c in df.columns if c != "date"]].apply(
         pd.to_numeric, errors="coerce"
     )
-    df["turnover"] = pd.NA
     return df.sort_values("date").reset_index(drop=True)
 
 # ---------- AKShare 工具函数 ---------- #
@@ -177,6 +175,7 @@ def _get_kline_akshare(code: str, start: str, end: str, adjust: str) -> pd.DataF
     df[[c for c in df.columns if c != "date"]] = df[[c for c in df.columns if c != "date"]].apply(
         pd.to_numeric, errors="coerce"
     )
+    df = df[["date", "open", "close", "high", "low", "volume"]]
     return df.sort_values("date").reset_index(drop=True)
 
 # ---------- Mootdx 工具函数 ---------- #
@@ -190,21 +189,18 @@ def _get_kline_mootdx(code: str, start: str, end: str, adjust: str, freq_code: i
     except Exception as e:
         logger.warning("Mootdx 拉取 %s 失败: %s", code, e)
         return pd.DataFrame()
-
     if df is None or df.empty:
         return pd.DataFrame()
 
     df = df.rename(
         columns={"datetime": "date", "open": "open", "high": "high", "low": "low", "close": "close", "vol": "volume"}
     )
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
     start_ts = pd.to_datetime(start, format="%Y%m%d")
     end_ts = pd.to_datetime(end, format="%Y%m%d")
-    df = df[(df["date"] >= start_ts) & (df["date"] <= end_ts)].copy()
+    df = df[(df["date"].dt.date >= start_ts.date()) & (df["date"].dt.date <= end_ts.date())].copy()
     df = df.sort_values("date").reset_index(drop=True)
-    df["amount"] = pd.NA
-    df["turnover"] = pd.NA
-    return df[["date", "open", "close", "high", "low", "volume", "amount", "turnover"]]
+    return df[["date", "open", "close", "high", "low", "volume"]]
 
 # ---------- 通用接口 ---------- #
 
@@ -235,8 +231,9 @@ def validate(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("数据包含未来日期，可能抓取错误！")
     return df
 
+def drop_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    return df.loc[:, ~df.columns.duplicated()]
 # ---------- 单只股票抓取 ---------- #
-
 def fetch_one(
     code: str,
     start: str,
@@ -246,14 +243,15 @@ def fetch_one(
     datasource: str,
     freq_code: int,
 ):
+
     csv_path = out_dir / f"{code}.csv"
 
-    # 增量更新：若本地已有数据则从最后一天 +1 开始
+    # 增量更新：若本地已有数据则从最后一天开始
     if incremental and csv_path.exists():
         try:
             existing = pd.read_csv(csv_path, parse_dates=["date"])
-            last_date = existing["date"].max() + pd.Timedelta(days=1)
-            if last_date >= pd.to_datetime(end, format="%Y%m%d"):
+            last_date = existing["date"].max()
+            if last_date.date() > pd.to_datetime(end, format="%Y%m%d").date():
                 logger.debug("%s 已是最新，无需更新", code)
                 return
             start = last_date.strftime("%Y%m%d")
@@ -268,7 +266,13 @@ def fetch_one(
                 break
             new_df = validate(new_df)
             if csv_path.exists() and incremental:
-                old_df = pd.read_csv(csv_path, parse_dates=["date"])
+                old_df = pd.read_csv(
+                    csv_path,
+                    parse_dates=["date"],
+                    index_col=False
+                )
+                old_df = drop_dup_columns(old_df)
+                new_df = drop_dup_columns(new_df)
                 new_df = (
                     pd.concat([old_df, new_df], ignore_index=True)
                     .drop_duplicates(subset="date")
@@ -282,16 +286,17 @@ def fetch_one(
     else:
         logger.error("%s 三次抓取均失败，已跳过！", code)
 
+
 # ---------- 主入口 ---------- #
 
 def main():
     parser = argparse.ArgumentParser(description="按市值筛选 A 股并抓取历史 K 线")
     parser.add_argument("--datasource", choices=["tushare", "akshare", "mootdx"], default="mootdx", help="历史 K 线数据源")
     parser.add_argument("--frequency", type=int, choices=list(_FREQ_MAP.keys()), default=4, help="K线频率编码，参见说明")
-    parser.add_argument("--exclude-gem", action="store_true", help="排除创业板/科创板/北交所")
+    parser.add_argument("--exclude-gem", default=True, help="True则排除创业板/科创板/北交所")
     parser.add_argument("--min-mktcap", type=float, default=5e9, help="最小总市值（含），单位：元")
     parser.add_argument("--max-mktcap", type=float, default=float("+inf"), help="最大总市值（含），单位：元，默认无限制")
-    parser.add_argument("--start", default="20250101", help="起始日期 YYYYMMDD 或 'today'")
+    parser.add_argument("--start", default="20190101", help="起始日期 YYYYMMDD 或 'today'")
     parser.add_argument("--end", default="today", help="结束日期 YYYYMMDD 或 'today'")
     parser.add_argument("--out", default="./data", help="输出目录")
     parser.add_argument("--workers", type=int, default=10, help="并发线程数")
