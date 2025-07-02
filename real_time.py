@@ -16,7 +16,10 @@ def main():
     for index, row in data.iterrows():
         print(f"\n股票代码: {row['code']}")
         for col in data.columns:
-            print(f"{col}: {row[col]}")
+            if col == "price":
+                print(f"{col}: {row[col]:.2f}")
+            if col == "servertime":
+                print(f"{col}: {row[col]}")
 
 if __name__ == '__main__':
     main()
