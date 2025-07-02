@@ -100,7 +100,7 @@ python fetch_kline.py \
 ### 运行选股
 
 ```bash
-python select_stock.py --date 2025-06-21 --config ./configs.json --data-dir ./data
+python select_stock.py --date 2025-07-03 --config ./configs.json --data-dir ./data
 python select_stock.py \
   --data-dir ./data        # CSV 行情目录
   --config ./configs.json  # Selector 配置

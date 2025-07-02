@@ -319,7 +319,6 @@ def fetch_one(
     datasource: str,
     freq_code: int,
 ):
-"""Original per‑stock fetcher for non‑Tushare sources (unchanged)."""
     csv_path = out_dir / f"{code}.csv"
 
     # 增量更新：若本地已有数据则从最后一天开始
