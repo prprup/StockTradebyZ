@@ -5,7 +5,7 @@
       "alias": "少妇战法",
       "activate": true,
       "params": {
-        "j_threshold": 1,
+        "j_threshold": 20,
         "bbi_min_window": 20,
         "max_window": 60,
         "price_range_pct": 0.5,
