@@ -8,6 +8,9 @@ def main():
     data = client.quotes(symbol=["002891"])
     print(data.columns)
 
+
+
+
     # 打印列名
     print("字段列表:")
     print(data.columns.tolist())
